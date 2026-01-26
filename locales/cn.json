@@ -1,0 +1,23 @@
+{
+  "game_start": "游戏开始。{time}",
+  "werewolf_killed": "玩家{n}被狼人杀死。",
+  "witch_notice_killed": "今晚，玩家{a}和玩家{b}被杀。",
+  "witch_notice_killed_single": "今晚，玩家{n}被杀。",
+  "witch_use_good_prompt": "你要使用解药吗？ y/n ",
+  "witch_use_bad_prompt": "你要使用毒药吗？ y/n ",
+  "please_type_again": "请重新输入。",
+  "which_player_save": "你要救哪个玩家？(请输入编号) ",
+  "player_saved_by_witch": "玩家{n}被女巫救下。",
+  "which_player_kill_witch": "你要毒死哪个玩家？(请输入编号) ",
+  "player_killed_by_witch": "玩家{n}被女巫毒死。",
+  "who_prophesy": "你要查验哪个玩家？(请输入编号) ",
+  "player_prophesyed": "玩家{n}被预言家查验。",
+  "who_vote": "你要投谁？(请输入编号) ",
+  "player_out": "玩家{n}被投出局。",
+  "you_are": "玩家{n}，你是{role}。",
+  "tonight_killed": "今晚，玩家{n}被杀死。",
+  "werewolves_win": "狼人获胜。",
+  "civilians_win": "村民获胜。",
+  "who_kill": "你要杀谁？(请输入编号)",
+  "no_valid_targets": "没有可选的目标。"
+}
