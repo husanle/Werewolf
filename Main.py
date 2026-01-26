@@ -1,118 +1,190 @@
 import random
 import time
 import os
-witch_good=True
-witch_bad=True
-with open("log.txt","w") as log:
-    log.write("Game start. "+time.strftime("%Y-%m-%d %H:%M:%S")+'\n')
+import logging
+import sys
+from lang import load, t
+
+# cross-platform clear
+def clear_screen():
+    os.system('cls' if os.name == 'nt' else 'clear')
+
+# choose language from --lang argument or LANG environment
+lang_arg = None
+if '--lang' in sys.argv:
+    idx = sys.argv.index('--lang') + 1
+    if idx < len(sys.argv):
+        lang_arg = sys.argv[idx]
+else:
+    env = os.environ.get('LANG', '')
+    if env:
+        lang_arg = env[:2]
+
+load(lang_arg or 'en')
+
+# configure logging to log.txt with utf-8 encoding
+logging.basicConfig(filename='log.txt', level=logging.INFO, format='%(asctime)s %(message)s', datefmt='%Y-%m-%d %H:%M:%S', encoding='utf-8')
+logging.info(t('game_start', time=time.strftime("%Y-%m-%d %H:%M:%S")))
+
+witch_good = True
+witch_bad = True
+
+# helper to get int input with validation
+def input_int(prompt, min_v=1, max_v=6, allow_empty=False, valid_set=None):
+    while True:
+        try:
+            s = input(prompt)
+            if allow_empty and s == '':
+                return None
+            v = int(s)
+            if v < min_v or v > max_v:
+                print(t('please_type_again'))
+                continue
+            if valid_set is not None and v not in valid_set:
+                print(t('please_type_again'))
+                continue
+            return v
+        except ValueError:
+            print(t('please_type_again'))
+
+
 def werewolf():
-    with open("log.txt","a") as log:
-        global player,tonight_died
-        if("Werewolf" in player):
-            time.sleep(3)
-            killed_player=int(input('Who are you going to kill?(use serial number)'))
-            while killed_player<1 or killed_player>6:
-                killed_player=int(input("Please type again."))
-            log.write("Player "+str(killed_player)+" was killed by the Werewolves.\n")
-            os.system("cls")
-            tonight_died.append(killed_player)
-            time.sleep(3)
-            if(player.count("Werewolf")==2):
-                killed_player = int(input('Who are you going to kill?(use serial number)'))
-                while killed_player < 1 or killed_player > 6:
-                    killed_player = int(input("Please type again."))
-                log.write("Player " + str(killed_player) + " was killed by the Werewolves.\n")
-                os.system("cls")
+    global player, tonight_died
+    if "Werewolf" in player:
+        time.sleep(1)
+        # ask the werewolves to choose a target (1-based)
+        killed_player = input_int(t('who_kill'))
+        logging.info(t('werewolf_killed', n=killed_player))
+        clear_screen()
+        tonight_died.append(killed_player)
+        time.sleep(1)
+        # if there are two alive werewolves, allow a second kill (keeps original behavior)
+        if player.count("Werewolf") == 2:
+            killed_player = input_int(t('who_kill'))
+            logging.info(t('werewolf_killed', n=killed_player))
+            clear_screen()
+            if killed_player not in tonight_died:
                 tonight_died.append(killed_player)
-                time.sleep(3)
+            time.sleep(1)
+
+
 def witch():
-    global player
-    if("Witch" in player):
-        time.sleep(3)
-        with open("log.txt","a") as log:
-            global witch_good,witch_bad
-            print("This night, Player"+str(tonight_died[0])+" and Player"+str(tonight_died[1])+" was killed.")
-            if witch_good:
-                a=input("Do you want to use the good potion? y/n ")
-                while a!="y" and a!="n":
-                    a=input("Please type again. ")
-                if a=="y":
-                    a=int(input("Which player do you want to save?(use serial number) "))
-                    while a < 1 or a > 6 or a not in tonight_died:
-                        a=input("Please type again. ")
-                    tonight_died.remove(a)
-                    log.write("Player"+str(a)+" was saved by the Witch. \n")
-                    witch_good=False
+    global player, witch_good, witch_bad
+    if "Witch" in player:
+        time.sleep(1)
+        if not tonight_died:
+            return
+        with open('log.txt', 'a', encoding='utf-8'):
+            # show who were chosen by werewolves
+            if len(tonight_died) == 1:
+                print(t('witch_notice_killed_single', n=tonight_died[0]))
+            else:
+                # join numbers
+                killed_str = ' and '.join(str(n) for n in tonight_died)
+                print(t('witch_notice_killed', a=tonight_died[0], b=tonight_died[1]))
+
+            # good potion
+            if witch_good and tonight_died:
+                a = input(t('witch_use_good_prompt'))
+                while a not in ('y', 'n'):
+                    a = input(t('please_type_again'))
+                if a == 'y':
+                    choice = input_int(t('which_player_save'), valid_set=set(tonight_died))
+                    tonight_died.remove(choice)
+                    logging.info(t('player_saved_by_witch', n=choice))
+                    witch_good = False
+
+            # bad potion
             if witch_bad:
-                a=input("Do you want to use the another potion? y/n ")
-                while a != "y" and a != "n":
-                    a = input("Please type again. ")
-                if a == "y":
-                    a = int(input("Which player do you want to kill?(use serial number) "))
-                    while a < 1 or a > 6 or a in tonight_died:
-                        a = input("Please type again.")
-                    tonight_died.append(a)
-                    log.write("Player" + str(a) + " was killed by the Witch. \n")
-                    witch_bad=False
-            os.system("cls")
+                a = input(t('witch_use_bad_prompt'))
+                while a not in ('y', 'n'):
+                    a = input(t('please_type_again'))
+                if a == 'y':
+                    # can kill someone not already in tonight_died
+                    excluded = set(tonight_died)
+                    valid = set(i+1 for i, r in enumerate(player) if r != '') - excluded
+                    if not valid:
+                        print(t('no_valid_targets'))
+                    else:
+                        choice = input_int(t('which_player_kill_witch'), valid_set=valid)
+                        tonight_died.append(choice)
+                        logging.info(t('player_killed_by_witch', n=choice))
+                        witch_bad = False
+            clear_screen()
+
+
 def prophet():
     global player
-    if("Prophet" in player):
-        time.sleep(3)
-        with open("log.txt", "a") as log:
-            a = int(input("Who will you prophesy about?(use serial number) "))
-            while a < 1 or a > 6:
-                a = int(input("Please type again. "))
-            print(player[a - 1])
-            log.write("Player" + str(a) + " was prophesyed by the Prophet.\n")
-            time.sleep(3)
-            os.system("cls")
+    if "Prophet" in player:
+        time.sleep(1)
+        a = input_int(t('who_prophesy'))
+        # reveal the role to the prophet (and log it)
+        role = player[a-1]
+        print(role)
+        logging.info(t('player_prophesyed', n=a))
+        time.sleep(1)
+        clear_screen()
+
+
 def vote():
-    votes=[0,0,0,0,0,0]
-    with open("log.txt","a") as log:
-        i=0
-        while i<6:
-            if player[i]!='':
-                a=int(input("Who will you vote for?(use serial number) "))
-                while a < 1 or a > 6 or player[a-1]=='':
-                    a = int(input("Please type again. " ))
-                votes[a-1]+=1
-            os.system("cls")
-            time.sleep(3)
-            i+=1
-        player[votes.index(max(votes))]=''
-        died.append(votes.index(max(votes)))
-        print("Player"+str(votes.index(max(votes)))+" was out.")
-        log.write("Player"+str(votes.index(max(votes)))+" was out.\n")
-player=[]
-died=[]
-character=["Civilian",'Civilian','Werewolf','Werewolf','Witch','Prophet']
-i=0
-n=0
-with open("log.txt","a") as log:
-    while i<6:
-        n=character.pop(random.randint(0,len(character)-1))
-        player.append(n)
-        print("Player"+str(i+1)+", you\'re "+player[i]+'.')
-        log.write("Player"+str(i+1)+" is "+player[i]+'.\n')
-        time.sleep(3)
-        os.system("cls")
-        time.sleep(3)
-        i += 1
-while ("Civilian" in player) and ("Werewolf" in player) and (("Witch" in player) or ("Prophet" in player)) :
+    global player, died
+    votes = [0] * len(player)
+    for i in range(len(player)):
+        if player[i] != '':
+            a = input_int(t('who_vote'), valid_set=set(j+1 for j, r in enumerate(player) if r != ''))
+            votes[a-1] += 1
+            clear_screen()
+            time.sleep(1)
+    max_votes = max(votes)
+    # pick the first player with max votes (original behavior)
+    victim = votes.index(max_votes)
+    # mark player as dead
+    player[victim] = ''
+    died.append(victim+1)
+    print(t('player_out', n=victim+1))
+    logging.info(t('player_out', n=victim+1))
+
+
+# game setup
+player = []
+died = []
+character = ["Civilian", "Civilian", "Werewolf", "Werewolf", "Witch", "Prophet"]
+
+# assign roles randomly
+for i in range(6):
+    role = character.pop(random.randint(0, len(character)-1))
+    player.append(role)
+    print(t('you_are', n=i+1, role=role))
+    logging.info(f"Player {i+1} is {role}.")
+    time.sleep(1)
+    clear_screen()
+
+# main game loop
+while ("Civilian" in player) and ("Werewolf" in player) and (("Witch" in player) or ("Prophet" in player)):
     tonight_died = []
     werewolf()
     witch()
     prophet()
-    died.append(tonight_died)
-    for i in tonight_died:
-        print("Tonight, Player"+str(i-1)+" was killed.")
-        player[i-1]=''
+
+    # apply tonight deaths
+    # remove duplicates and only kill players that are currently alive
+    unique_deaths = []
+    for idx in tonight_died:
+        if 1 <= idx <= len(player) and player[idx-1] != '' and idx not in unique_deaths:
+            unique_deaths.append(idx)
+
+    for i in unique_deaths:
+        print(t('tonight_killed', n=i))
+        logging.info(t('tonight_killed', n=i))
+        player[i-1] = ''
+        died.append(i)
+
     vote()
-with open("log.txt","a") as log:
-    if(("Civilian" not in player) or (("Witch" not in player) or ("Prophet" not in player))):
-        print("The Werewolves is win.")
-        log.write("The Werewolves is win.")
-    else:
-        print("The Civilians is win.")
-        log.write("The Civilians is win.")
+
+# game end
+if ("Civilian" not in player) or (("Witch" not in player) and ("Prophet" not in player)):
+    print(t('werewolves_win'))
+    logging.info(t('werewolves_win'))
+else:
+    print(t('civilians_win'))
+    logging.info(t('civilians_win'))
