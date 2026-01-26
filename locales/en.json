@@ -1,0 +1,23 @@
+{
+  "game_start": "Game start. {time}",
+  "werewolf_killed": "Player {n} was killed by the Werewolves.",
+  "witch_notice_killed": "This night, Player {a} and Player {b} were killed.",
+  "witch_notice_killed_single": "This night, Player {n} was killed.",
+  "witch_use_good_prompt": "Do you want to use the good potion? y/n ",
+  "witch_use_bad_prompt": "Do you want to use the another potion? y/n ",
+  "please_type_again": "Please type again.",
+  "which_player_save": "Which player do you want to save?(use serial number) ",
+  "player_saved_by_witch": "Player {n} was saved by the Witch.",
+  "which_player_kill_witch": "Which player do you want to kill?(use serial number) ",
+  "player_killed_by_witch": "Player {n} was killed by the Witch.",
+  "who_prophesy": "Who will you prophesy about?(use serial number) ",
+  "player_prophesyed": "Player {n} was prophesyed by the Prophet.",
+  "who_vote": "Who will you vote for?(use serial number) ",
+  "player_out": "Player {n} was out.",
+  "you_are": "Player {n}, you're {role}.",
+  "tonight_killed": "Tonight, Player {n} was killed.",
+  "werewolves_win": "The Werewolves win.",
+  "civilians_win": "The Civilians win.",
+  "who_kill": "Who are you going to kill?(use serial number)",
+  "no_valid_targets": "No valid targets available."
+}
