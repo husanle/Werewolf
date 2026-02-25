@@ -28,6 +28,7 @@ logging.info(t('game_start', time=time.strftime("%Y-%m-%d %H:%M:%S")))
 
 witch_good = True
 witch_bad = True
+player = []
 
 # helper to get int input with validation
 def input_int(prompt, min_v=1, max_v=6, allow_empty=False, valid_set=None):
