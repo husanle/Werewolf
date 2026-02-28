@@ -19,5 +19,9 @@
   "werewolves_win": "狼人获胜。",
   "civilians_win": "村民获胜。",
   "who_kill": "你要杀谁？(请输入编号)",
-  "no_valid_targets": "没有可选的目标。"
+  "no_valid_targets": "没有可选的目标。",
+  "werewolf":"狼人",
+  "witch":"女巫",
+  "civilian":"平民"，
+  "prophet":"预言家"
 }
