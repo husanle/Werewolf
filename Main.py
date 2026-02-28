@@ -11,8 +11,8 @@ def clear_screen():
 
 # choose language from --lang argument or LANG environment
 lang_arg = None
-if '--lang' in sys.argv:
-    idx = sys.argv.index('--lang') + 1
+if '--lang=' in sys.argv:
+    idx = sys.argv.index('--lang=') + 1
     if idx < len(sys.argv):
         lang_arg = sys.argv[idx]
 else:
@@ -156,7 +156,7 @@ for i in range(6):
     role = character.pop(random.randint(0, len(character)-1))
     player.append(role)
     print(t('you_are', n=i+1, role=role))
-    logging.info(f"Player {i+1} is {role}.")
+    logging.info(f"Player {i+1} is {t(role)}.")
     time.sleep(1)
     clear_screen()
 
