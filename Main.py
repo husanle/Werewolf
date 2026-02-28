@@ -149,7 +149,7 @@ def vote():
 # game setup
 player = []
 died = []
-character = ["Civilian", "Civilian", "Werewolf", "Werewolf", "Witch", "Prophet"]
+character = ["civilian", "civilian", "werewolf", "werewolf", "witch", "prophet"]
 
 # assign roles randomly
 for i in range(6):
@@ -161,7 +161,7 @@ for i in range(6):
     clear_screen()
 
 # main game loop
-while ("Civilian" in player) and ("Werewolf" in player) and (("Witch" in player) or ("Prophet" in player)):
+while ("civilian" in player) and ("werewolf" in player) and (("witch" in player) or ("prophet" in player)):
     tonight_died = []
     werewolf()
     witch()
@@ -183,7 +183,7 @@ while ("Civilian" in player) and ("Werewolf" in player) and (("Witch" in player)
     vote()
 
 # game end
-if ("Civilian" not in player) or (("Witch" not in player) and ("Prophet" not in player)):
+if ("civilian" not in player) or (("witch" not in player) and ("prophet" not in player)):
     print(t('werewolves_win'))
     logging.info(t('werewolves_win'))
 else:
