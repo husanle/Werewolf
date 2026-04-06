@@ -4,7 +4,7 @@ import os
 import logging
 import sys
 from lang import load, t
-from config import is_openai_configured
+from config import is_configured, get_provider
 import ai
 
 # cross-platform clear
@@ -39,10 +39,15 @@ for arg in sys.argv:
 logging.basicConfig(filename='log.txt', level=logging.INFO, format='%(asctime)s %(message)s', datefmt='%Y-%m-%d %H:%M:%S', encoding='utf-8')
 logging.info(t('game_start', time=time.strftime("%Y-%m-%d %H:%M:%S")))
 
-# Check if OpenAI is configured
-if not is_openai_configured():
-    print(t('openai_not_configured'))
-    logging.info(t('openai_not_configured'))
+# Check if AI provider is configured
+if not is_configured():
+    provider = get_provider()
+    if provider == "openai":
+        print(t('openai_not_configured'))
+        logging.info(t('openai_not_configured'))
+    else:
+        print(f"{provider.upper()} API key not configured. AI players will fall back to random choices.")
+        logging.info(f"{provider.upper()} API key not configured. AI players will fall back to random choices.")
 
 witch_good = True
 witch_bad = True

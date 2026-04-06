@@ -27,5 +27,7 @@
   "ask_ai_player": "玩家{n}是否由AI控制？ y/n ",
   "ai_thinking": "AI（玩家{n}）正在思考...",
   "ai_chose": "AI（玩家{n}）选择了{choice}",
-  "openai_not_configured": "OpenAI API 密钥未配置。AI玩家将使用随机选择。"
+  "openai_not_configured": "OpenAI API 密钥未配置。AI玩家将使用随机选择。",
+  "api_provider_openai": "OpenAI (GPT-3.5/GPT-4)",
+  "api_provider_anthropic": "Anthropic (Claude)"
 }

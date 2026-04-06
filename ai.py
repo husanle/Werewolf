@@ -1,7 +1,7 @@
 import logging
 import random
 import re
-from config import client, OPENAI_MODEL, OPENAI_TEMPERATURE
+from config import client, model, get_provider, TEMPERATURE, TIMEOUT
 
 
 def parse_numeric_response(response_text, valid_choices):
@@ -35,29 +35,87 @@ def parse_yesno_response(response_text):
     return 'n'
 
 
-def call_openai(messages, max_retries=3):
-    """
-    Call OpenAI Chat Completions API with error handling and retries.
-    Returns the response text or None on failure.
-    """
+def call_openai(messages, max_tokens=100, max_retries=3):
+    """Call OpenAI Chat Completions API."""
     if client is None:
         return None
 
     for attempt in range(max_retries):
         try:
             response = client.chat.completions.create(
-                model=OPENAI_MODEL,
+                model=model,
                 messages=messages,
-                temperature=OPENAI_TEMPERATURE,
-                max_tokens=100
+                temperature=TEMPERATURE,
+                max_tokens=max_tokens,
+                timeout=TIMEOUT
             )
             content = response.choices[0].message.content.strip()
-            logging.info(f"AI response: {content}")
             return content
         except Exception as e:
             logging.error(f"OpenAI API call failed (attempt {attempt + 1}/{max_retries}): {e}")
             if attempt == max_retries - 1:
                 return None
+
+
+def call_anthropic(messages, max_tokens=100, max_retries=3):
+    """Call Anthropic Messages API."""
+    if client is None:
+        return None
+
+    # Convert OpenAI-format messages to Anthropic format
+    anthropic_messages = []
+    system_message = None
+    for msg in messages:
+        if msg["role"] == "system":
+            system_message = msg["content"]
+        else:
+            anthropic_messages.append({
+                "role": msg["role"],
+                "content": msg["content"]
+            })
+
+    for attempt in range(max_retries):
+        try:
+            if system_message:
+                response = client.messages.create(
+                    model=model,
+                    system=system_message,
+                    messages=anthropic_messages,
+                    temperature=TEMPERATURE,
+                    max_tokens=max_tokens,
+                    timeout=TIMEOUT
+                )
+            else:
+                response = client.messages.create(
+                    model=model,
+                    messages=anthropic_messages,
+                    temperature=TEMPERATURE,
+                    max_tokens=max_tokens,
+                    timeout=TIMEOUT
+                )
+            content = response.content[0].text.strip()
+            return content
+        except Exception as e:
+            logging.error(f"Anthropic API call failed (attempt {attempt + 1}/{max_retries}): {e}")
+            if attempt == max_retries - 1:
+                return None
+
+
+def call_ai(messages, max_tokens=100, max_retries=3):
+    """Generic AI call that dispatches to the configured provider."""
+    provider = get_provider()
+    logging.info(f"Calling {provider} AI...")
+
+    if provider == "openai":
+        response = call_openai(messages, max_tokens, max_retries)
+    elif provider == "anthropic":
+        response = call_anthropic(messages, max_tokens, max_retries)
+    else:
+        return None
+
+    if response is not None:
+        logging.info(f"AI response: {response}")
+    return response
 
 
 def get_system_prompt():
@@ -107,7 +165,7 @@ Respond with ONLY the player number you want to kill.
     valid_targets = [p for p in alive_players if p not in other_werewolves]
     valid_set = set(valid_targets)
 
-    response = call_openai(messages)
+    response = call_ai(messages, max_tokens=100)
     if response is None:
         # Fallback to random choice
         choice = random.choice(valid_targets)
@@ -160,7 +218,7 @@ Example: n n → use neither
         {"role": "user", "content": prompt}
     ]
 
-    response = call_openai(messages)
+    response = call_ai(messages, max_tokens=150)
     if response is None:
         # Fallback: don't use anything
         logging.info("AI fell back: not using any potions")
@@ -177,7 +235,7 @@ Example: n n → use neither
 
     # Check for heal
     if has_heal:
-        if 'y' in lowered:
+        if 'y' in lowered[:20]:  # Check beginning for answer
             use_heal = 'y'
             # First number is heal target
             for num_str in numbers:
@@ -202,8 +260,8 @@ Example: n n → use neither
                 elif num != heal_target:
                     poison_target = num
                     use_poison = 'y'
-                    break
-        if poison_target is None and 'y' in lowered.split():
+                break
+        if poison_target is None and 'y' in lowered:
             # Try to find any valid
             if valid_poison_targets:
                 poison_target = random.choice(valid_poison_targets)
@@ -245,7 +303,7 @@ Respond with ONLY the player number you want to check.
     valid_targets = [p for p in alive_players if p not in previous_checks]
     valid_set = set(valid_targets)
 
-    response = call_openai(messages)
+    response = call_ai(messages, max_tokens=100)
     if response is None:
         choice = random.choice(valid_targets)
         logging.info(f"AI fell back to random choice: {choice}")
@@ -303,7 +361,7 @@ Respond with ONLY the player number you want to vote for.
     valid_targets = [p for p in alive_players if p != player_num]
     valid_set = set(valid_targets)
 
-    response = call_openai(messages)
+    response = call_ai(messages, max_tokens=100)
     if response is None:
         choice = random.choice(valid_targets)
         logging.info(f"AI fell back to random choice: {choice}")
