@@ -19,5 +19,9 @@
   "werewolves_win": "The Werewolves win.",
   "civilians_win": "The Civilians win.",
   "who_kill": "Who are you going to kill?(use serial number)",
-  "no_valid_targets": "No valid targets available."
+  "no_valid_targets": "No valid targets available.",
+  "ask_ai_player": "Is Player {n} controlled by AI? y/n ",
+  "ai_thinking": "AI (Player {n}) is thinking...",
+  "ai_chose": "AI (Player {n}) chose {choice}",
+  "openai_not_configured": "OpenAI API key not configured. AI players will fall back to random choices."
 }

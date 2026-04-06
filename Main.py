@@ -4,6 +4,8 @@ import os
 import logging
 import sys
 from lang import load, t
+from config import is_openai_configured
+import ai
 
 # cross-platform clear
 def clear_screen():
@@ -12,9 +14,8 @@ def clear_screen():
 # choose language from --lang argument or LANG environment
 lang_arg = None
 if '--lang=' in sys.argv:
-    idx = sys.argv.index('--lang=') + 1
-    if idx < len(sys.argv):
-        lang_arg = sys.argv[idx]
+    idx = [i for i, arg in enumerate(sys.argv) if arg.startswith('--lang=')][0]
+    lang_arg = sys.argv[idx].split('=', 1)[1]
 else:
     env = os.environ.get('LANG', '')
     if env:
@@ -22,13 +23,37 @@ else:
 
 load(lang_arg or 'en')
 
+# parse --ai argument: --ai=1,2,3
+ai_players_arg = None
+ai_player_numbers = []
+for arg in sys.argv:
+    if arg.startswith('--ai='):
+        ai_players_arg = arg.split('=', 1)[1]
+        try:
+            ai_player_numbers = [int(x.strip()) for x in ai_players_arg.split(',') if x.strip()]
+        except ValueError:
+            pass
+        break
+
 # configure logging to log.txt with utf-8 encoding
 logging.basicConfig(filename='log.txt', level=logging.INFO, format='%(asctime)s %(message)s', datefmt='%Y-%m-%d %H:%M:%S', encoding='utf-8')
 logging.info(t('game_start', time=time.strftime("%Y-%m-%d %H:%M:%S")))
 
+# Check if OpenAI is configured
+if not is_openai_configured():
+    print(t('openai_not_configured'))
+    logging.info(t('openai_not_configured'))
+
 witch_good = True
 witch_bad = True
 player = []
+# Track which players are AI (1-based index, is_ai[0] is player 1)
+is_ai = [False] * 6
+# Track prophet checks for AI
+prophet_checks = {}
+# Track vote history for AI
+vote_history = {}
+
 
 # helper to get int input with validation
 def input_int(prompt, min_v=1, max_v=6, allow_empty=False, valid_set=None):
@@ -49,18 +74,64 @@ def input_int(prompt, min_v=1, max_v=6, allow_empty=False, valid_set=None):
             print(t('please_type_again'))
 
 
+# helper for yes/no input
+def input_yesno(prompt):
+    while True:
+        a = input(prompt)
+        a = a.strip().lower()
+        if a in ('y', 'n'):
+            return a
+        print(t('please_type_again'))
+
+
+def get_alive_players():
+    """Get list of alive player numbers (1-based)."""
+    return [i + 1 for i, r in enumerate(player) if r != '']
+
+
+def get_dead_players():
+    """Get list of dead player numbers (1-based)."""
+    return died
+
+
 def werewolf():
     global player, tonight_died
-    if "Werewolf" in player:
-        time.sleep(1)
-        # ask the werewolves to choose a target (1-based)
-        killed_player = input_int(t('who_kill'))
-        logging.info(t('werewolf_killed', n=killed_player))
-        clear_screen()
-        tonight_died.append(killed_player)
-        time.sleep(1)
-        # if there are two alive werewolves, allow a second kill (keeps original behavior)
-        if player.count("Werewolf") == 2:
+    # Get all alive werewolves
+    alive_werewolves = []
+    for i, role in enumerate(player):
+        if role == 'werewolf':
+            alive_werewolves.append(i + 1)  # 1-based
+
+    for werewolf_num in alive_werewolves:
+        if len(tonight_died) >= len(alive_werewolves):
+            # Already got enough kills
+            break
+
+        other_werewolves = [w for w in alive_werewolves if w != werewolf_num]
+        alive_players = get_alive_players()
+
+        if is_ai[werewolf_num - 1]:
+            # AI werewolf
+            print(t('ai_thinking', n=werewolf_num))
+            valid_targets = [p for p in alive_players if p not in alive_werewolves]
+            if not valid_targets:
+                continue
+            choice = ai.ai_werewolf_decision(
+                player_num=werewolf_num,
+                role='werewolf',
+                alive_players=alive_players,
+                dead_players=get_dead_players(),
+                other_werewolves=other_werewolves
+            )
+            print(t('ai_chose', n=werewolf_num, choice=choice))
+            logging.info(t('werewolf_killed', n=choice))
+            logging.info(t('ai_chose', n=werewolf_num, choice=choice))
+            if choice not in tonight_died:
+                tonight_died.append(choice)
+            time.sleep(1)
+            clear_screen()
+        else:
+            # Human werewolf
             killed_player = input_int(t('who_kill'))
             logging.info(t('werewolf_killed', n=killed_player))
             clear_screen()
@@ -71,71 +142,189 @@ def werewolf():
 
 def witch():
     global player, witch_good, witch_bad
-    if "Witch" in player:
-        time.sleep(1)
-        if not tonight_died:
-            return
-        with open('log.txt', 'a', encoding='utf-8'):
-            # show who were chosen by werewolves
-            if len(tonight_died) == 1:
-                print(t('witch_notice_killed_single', n=tonight_died[0]))
-            else:
-                # join numbers
-                killed_str = ' and '.join(str(n) for n in tonight_died)
-                print(t('witch_notice_killed', a=tonight_died[0], b=tonight_died[1]))
+    # Find which player is witch
+    witch_idx = None
+    for i, role in enumerate(player):
+        if role == 'witch':
+            witch_idx = i
+            break
+    if witch_idx is None:
+        return
 
-            # good potion
-            if witch_good and tonight_died:
-                a = input(t('witch_use_good_prompt'))
-                while a not in ('y', 'n'):
-                    a = input(t('please_type_again'))
-                if a == 'y':
-                    choice = input_int(t('which_player_save'), valid_set=set(tonight_died))
-                    tonight_died.remove(choice)
-                    logging.info(t('player_saved_by_witch', n=choice))
-                    witch_good = False
+    witch_num = witch_idx + 1
+    alive_players = get_alive_players()
+    dead_players = get_dead_players()
 
-            # bad potion
-            if witch_bad:
-                a = input(t('witch_use_bad_prompt'))
-                while a not in ('y', 'n'):
-                    a = input(t('please_type_again'))
-                if a == 'y':
-                    # can kill someone not already in tonight_died
-                    excluded = set(tonight_died)
-                    valid = set(i+1 for i, r in enumerate(player) if r != '') - excluded
-                    if not valid:
-                        print(t('no_valid_targets'))
-                    else:
-                        choice = input_int(t('which_player_kill_witch'), valid_set=valid)
-                        tonight_died.append(choice)
-                        logging.info(t('player_killed_by_witch', n=choice))
-                        witch_bad = False
+    time.sleep(1)
+    if not tonight_died:
+        return
+    with open('log.txt', 'a', encoding='utf-8'):
+        # show who were chosen by werewolves
+        if len(tonight_died) == 1:
+            print(t('witch_notice_killed_single', n=tonight_died[0]))
+        else:
+            # join numbers
+            killed_str = ' and '.join(str(n) for n in tonight_died)
+            print(t('witch_notice_killed', a=tonight_died[0], b=tonight_died[1]))
+
+        if is_ai[witch_num - 1]:
+            # AI witch
+            print(t('ai_thinking', n=witch_num))
+            use_heal, heal_target, use_poison, poison_target = ai.ai_witch_decision(
+                player_num=witch_num,
+                role='witch',
+                alive_players=alive_players,
+                dead_players=dead_players,
+                tonight_killed=tonight_died,
+                has_heal=witch_good,
+                has_poison=witch_bad
+            )
+            print(t('ai_chose', n=witch_num, choice=f"{use_heal} {heal_target or ''} {use_poison} {poison_target or ''}"))
+            logging.info(t('ai_chose', n=witch_num, choice=f"{use_heal} {heal_target or ''} {use_poison} {poison_target or ''}"))
+
+            # Apply healing
+            if use_heal == 'y' and witch_good and heal_target in tonight_died:
+                tonight_died.remove(heal_target)
+                logging.info(t('player_saved_by_witch', n=heal_target))
+                witch_good = False
+
+            # Apply poison
+            if use_poison == 'y' and witch_bad and poison_target is not None:
+                excluded = set(tonight_died)
+                valid = set(i+1 for i, r in enumerate(player) if r != '') - excluded
+                if poison_target in valid:
+                    if poison_target not in tonight_died:
+                        tonight_died.append(poison_target)
+                    logging.info(t('player_killed_by_witch', n=poison_target))
+                    witch_bad = False
+
+            time.sleep(1)
             clear_screen()
+            return
+
+        # Human witch
+        # good potion
+        if witch_good and tonight_died:
+            a = input_yesno(t('witch_use_good_prompt'))
+            if a == 'y':
+                choice = input_int(t('which_player_save'), valid_set=set(tonight_died))
+                tonight_died.remove(choice)
+                logging.info(t('player_saved_by_witch', n=choice))
+                witch_good = False
+
+        # bad potion
+        if witch_bad:
+            a = input_yesno(t('witch_use_bad_prompt'))
+            if a == 'y':
+                # can kill someone not already in tonight_died
+                excluded = set(tonight_died)
+                valid = set(i+1 for i, r in enumerate(player) if r != '') - excluded
+                if not valid:
+                    print(t('no_valid_targets'))
+                else:
+                    choice = input_int(t('which_player_kill_witch'), valid_set=valid)
+                    if choice not in tonight_died:
+                        tonight_died.append(choice)
+                    logging.info(t('player_killed_by_witch', n=choice))
+                    witch_bad = False
+        clear_screen()
 
 
 def prophet():
-    global player
-    if "Prophet" in player:
-        time.sleep(1)
-        a = input_int(t('who_prophesy'))
-        # reveal the role to the prophet (and log it)
-        role = player[a-1]
-        print(role)
-        logging.info(t('player_prophesyed', n=a))
+    global player, prophet_checks
+    # Find which player is prophet
+    prophet_idx = None
+    for i, role in enumerate(player):
+        if role == 'prophet':
+            prophet_idx = i
+            break
+    if prophet_idx is None:
+        return
+
+    prophet_num = prophet_idx + 1
+    alive_players = get_alive_players()
+    dead_players = get_dead_players()
+
+    time.sleep(1)
+
+    if is_ai[prophet_num - 1]:
+        # AI prophet
+        print(t('ai_thinking', n=prophet_num))
+        choice = ai.ai_prophet_decision(
+            player_num=prophet_num,
+            role='prophet',
+            alive_players=alive_players,
+            dead_players=dead_players,
+            previous_checks=prophet_checks
+        )
+        print(t('ai_chose', n=prophet_num, choice=choice))
+        logging.info(t('player_prophesyed', n=choice))
+        logging.info(t('ai_chose', n=prophet_num, choice=choice))
+        # reveal the role to AI (store for future)
+        role_revealed = player[choice - 1]
+        prophet_checks[choice] = role_revealed
+        print(role_revealed)
         time.sleep(1)
         clear_screen()
+        return
+
+    # Human prophet
+    a = input_int(t('who_prophesy'))
+    # reveal the role to the prophet (and log it)
+    role = player[a-1]
+    prophet_checks[a] = role
+    print(role)
+    logging.info(t('player_prophesyed', n=a))
+    time.sleep(1)
+    clear_screen()
 
 
 def vote():
     global player, died
+    global vote_history
+    day_number = len(died) + 1
     votes = [0] * len(player)
+    current_votes = []
+
     for i in range(len(player)):
         if player[i] != '':
-            a = input_int(t('who_vote'), valid_set=set(j+1 for j, r in enumerate(player) if r != ''))
+            player_num = i + 1
+            role = player[i]
+            alive_players = get_alive_players()
+            dead_players = get_dead_players()
+
+            # Get known roles (from prophet checks)
+            known_roles = {}
+            for p_num, r in prophet_checks.items():
+                if player[p_num - 1] != '':  # still alive
+                    known_roles[p_num] = r
+
+            if is_ai[player_num - 1]:
+                # AI vote
+                print(t('ai_thinking', n=player_num))
+                choice = ai.ai_vote_decision(
+                    player_num=player_num,
+                    role=role,
+                    alive_players=alive_players,
+                    dead_players=dead_players,
+                    vote_history=vote_history,
+                    known_roles=known_roles
+                )
+                print(t('ai_chose', n=player_num, choice=choice))
+                logging.info(t('ai_chose', n=player_num, choice=choice))
+                a = choice
+            else:
+                # Human vote
+                a = input_int(t('who_vote'), valid_set=set(j+1 for j, r in enumerate(player) if r != ''))
+
             votes[a-1] += 1
+            current_votes.append((player_num, a))
             clear_screen()
             time.sleep(1)
+
+    # Save vote history
+    vote_history[day_number] = current_votes
+
     max_votes = max(votes)
     # pick the first player with max votes (original behavior)
     victim = votes.index(max_votes)
@@ -159,6 +348,26 @@ for i in range(6):
     logging.info(f"Player {i+1} is {t(role)}.")
     time.sleep(1)
     clear_screen()
+
+# Configure which players are AI
+if ai_player_numbers:
+    # From command line argument
+    for n in ai_player_numbers:
+        if 1 <= n <= 6:
+            is_ai[n - 1] = True
+else:
+    # Interactive configuration
+    for i in range(6):
+        player_num = i + 1
+        ans = input_yesno(t('ask_ai_player', n=player_num))
+        if ans == 'y':
+            is_ai[i] = True
+        clear_screen()
+
+# Log AI configuration
+for i in range(6):
+    if is_ai[i]:
+        logging.info(f"Player {i+1} is AI.")
 
 # main game loop
 while ("civilian" in player) and ("werewolf" in player) and (("witch" in player) or ("prophet" in player)):
